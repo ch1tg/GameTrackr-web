@@ -38,7 +38,7 @@ This client is built with **React (TypeScript)** and **Material-UI (MUI)**. It c
 ### 1. Prerequisites
 
 * Node.js (v18+) and npm/yarn.
-* The [GameTrackr API (Backend)](https://github.com/your-username/GameTrackr/tree/main/GameTrackr-api) **must be running** (usually at `http://localhost:80`).
+* The [GameTrackr API (Backend)](https://github.com/ch1tg/GameTrackr-api) **must be running** (usually at `http://localhost:80`).
 
 ### 2. Configuration
 
