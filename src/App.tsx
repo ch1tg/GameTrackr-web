@@ -11,6 +11,7 @@ import UserProfilePage from "./pages/UserProfilePage.tsx";
 import ProfileEditPage from "./pages/ProfileEditingPage.tsx";
 import GameDetailPage from "./pages/GameDetailPage.tsx";
 import WishlistPage from "./pages/WishlistPage.tsx";
+import SearchResultPage from "./pages/SearchResultPage.tsx";
 
 function App() {
     const { isLoading } = useAuth();
@@ -37,6 +38,7 @@ function App() {
                 <Route path="/users/:username/wishlist" element={<WishlistPage />} />
                 <Route path="/games/:gameId" element={<GameDetailPage />} />
                 <Route path="/users/:username" element={<UserProfilePage />} />
+                <Route path="/search" element={<SearchResultPage />} />
                 <Route element={<ProtectedRoute />}>
                     <Route path="/profile/edit" element={<ProfileEditPage />} />
                 </Route>

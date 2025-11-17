@@ -51,7 +51,6 @@ export async function getTrendingGames({
     }
 
     try {
-        // 4. Передаем параметры в запрос
         const response = await apiClient.get<PaginatedGameResponse>(`/games/trending?${params.toString()}`);
         return response.data;
     } catch (error: any) {
