@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams, Link as RouterLink } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
     Container,
     Paper,
@@ -10,7 +10,6 @@ import {
     Grid,
     Tabs,
     Tab,
-    Pagination,
     Button,
     Divider
 } from '@mui/material';
@@ -22,12 +21,10 @@ import {
 } from '../api/search.service';
 import { type Game } from '../api/game.service';
 import GameCard from '../components/GameCard';
+import UserCard from '../components/UserCard';
 
 
-    function GamesList({ games, lastGameElementRef }: { games: Game[], lastGameElementRef?: (node: HTMLElement | null) => void }) {
-    if (!Array.isArray(games)) {
-        return <Alert severity="error">Invalid games response</Alert>;
-    }
+function GamesList({ games, lastGameElementRef }: { games: Game[], lastGameElementRef?: (node: HTMLElement | null) => void }) {
     if (games.length === 0) {
         return <Alert severity="info">No games found for this query.</Alert>;
     }
@@ -46,36 +43,21 @@ import GameCard from '../components/GameCard';
     );
 }
 
-/**
- * Внутренний "глупый" компонент для списка Пользователей
- */
-function UsersList({ users }: { users: SearchedUser[] }) {
+
+
+function UsersList({ users, lastUserElementRef }: { users: SearchedUser[], lastUserElementRef?: (node: HTMLElement | null) => void }) {
     if (users.length === 0) {
         return <Alert severity="info">No users found for this query.</Alert>;
     }
     return (
-        <Grid container spacing={2}>
-            {users.map(user => (
-                <Grid key={user.username} size={{ xs: 12, sm: 6, md: 4 }}>
-                    <Paper
-                        elevation={2}
-                        sx={{
-                            p: 2,
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                        }}
-                    >
-                        <Typography variant="h6">{user.username}</Typography>
-                        <Button
-                            component={RouterLink}
-                            to={`/users/${user.username}`}
-                            variant="outlined"
-                            size="small"
-                        >
-                            View
-                        </Button>
-                    </Paper>
+        <Grid container spacing={3}>
+            {users.map((user, index) => (
+                <Grid
+                    key={user.username}
+                    size={{ xs: 12, sm: 6, md: 4 }}
+                    ref={users.length === index + 1 ? lastUserElementRef : null}
+                >
+                    <UserCard user={user} />
                 </Grid>
             ))}
         </Grid>
@@ -92,33 +74,49 @@ export default function SearchResultPage() {
 
 
     const [gamePage, setGamePage] = useState(1);
-    const userPage = parseInt(searchParams.get('page') || '1', 10);
-
+    const [userPage, setUserPage] = useState(1);
 
     const [users, setUsers] = useState<SearchedUser[]>([]);
     const [games, setGames] = useState<Game[]>([]);
 
-    const [userPagination, setUserPagination] = useState({ total_pages: 1, current_page: 1 });
+
+    const [hasNextUserPage, setHasNextUserPage] = useState(true);
     const [hasNextGamePage, setHasNextGamePage] = useState(true);
+
 
     const [isLoading, setIsLoading] = useState(true);
     const [isFetchingMore, setIsFetchingMore] = useState(false);
     const [error, setError] = useState('');
 
-    const observer = useRef<IntersectionObserver | null>(null);
+
+    const gameObserver = useRef<IntersectionObserver | null>(null);
     const lastGameElementRef = useCallback((node: HTMLElement | null) => {
         if (isLoading || isFetchingMore) return;
-        if (observer.current) observer.current.disconnect();
+        if (gameObserver.current) gameObserver.current.disconnect();
 
-        observer.current = new IntersectionObserver(entries => {
+        gameObserver.current = new IntersectionObserver(entries => {
             if (entries[0].isIntersecting && hasNextGamePage) {
-
                 setGamePage(prevPage => prevPage + 1);
             }
         });
-
-        if (node) observer.current.observe(node);
+        if (node) gameObserver.current.observe(node);
     }, [isLoading, isFetchingMore, hasNextGamePage]);
+
+
+    const userObserver = useRef<IntersectionObserver | null>(null);
+    const lastUserElementRef = useCallback((node: HTMLElement | null) => {
+        if (isLoading || isFetchingMore) return;
+        if (userObserver.current) userObserver.current.disconnect();
+
+        userObserver.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasNextUserPage) {
+                setUserPage(prevPage => prevPage + 1);
+            }
+        });
+        if (node) userObserver.current.observe(node);
+    }, [isLoading, isFetchingMore, hasNextUserPage]);
+
+
     useEffect(() => {
         if (!q) {
             setError('Search query is missing.');
@@ -130,31 +128,36 @@ export default function SearchResultPage() {
             setIsLoading(true);
             setError('');
             setUsers([]);
-            setGames([]); // Сбрасываем игры
-            setGamePage(1); // Сбрасываем страницу игр
+            setGames([]);
+            setGamePage(1);
+            setUserPage(1);
             setHasNextGamePage(true);
+            setHasNextUserPage(true);
 
             try {
                 if (tab === 'users') {
-                    const data = await searchUsers(q, userPage, 20);
-                    setUsers(data.users);
-                    setUserPagination({ total_pages: data.total_pages, current_page: data.current_page });
 
-                } else if (tab === 'games') {
-                    // Загружаем ПЕРВУЮ страницу игр
                     setIsFetchingMore(true);
-                    const data = await searchGames(q, 1, 20); // Вызываем без ordering
-                    // --- ИСПРАВЛЕНИЕ: Копируем логику GameContext.tsx ---
-                    setGames(data.games); // Устанавливаем первую страницу
-                    setHasNextGamePage(data.nextPage !== null); // <-- Проверяем nextPage
-                    // ---
+                    const data = await searchUsers(q, 1, 20);
+                    setUsers(data.users);
+
+                    setHasNextUserPage(data.current_page < data.total_pages);
                     setIsFetchingMore(false);
 
-                } else { // tab === 'all'
+                } else if (tab === 'games') {
+
+                    setIsFetchingMore(true);
+                    const data = await searchGames(q, 1, 20);
+                    setGames(data.games);
+                    setHasNextGamePage(data.nextPage !== null);
+                    setIsFetchingMore(false);
+
+                } else {
                     const data = await searchAll(q, 15, 15);
                     setUsers(data.users);
-                    setGames(data.games); // data.games - это уже массив
-                    setHasNextGamePage(false); // Нет "load more" на "All"
+                    setGames(data.games);
+                    setHasNextGamePage(false);
+                    setHasNextUserPage(false);
                 }
 
             } catch (err: any) {
@@ -166,20 +169,15 @@ export default function SearchResultPage() {
         };
 
         fetchNewData();
-    }, [q, tab, userPage]); // <-- Убрали 'ordering'
-
-
+    }, [q, tab]);
 
     useEffect(() => {
-
         if (gamePage === 1 || !q || tab !== 'games') return;
 
         const loadMoreGames = async () => {
             setIsFetchingMore(true);
             try {
                 const data = await searchGames(q, gamePage, 20);
-
-
                 setGames(prevGames => {
                     const newGames = data.games.filter(
                         g => !(prevGames.map(pg => pg.id).includes(g.id))
@@ -187,8 +185,6 @@ export default function SearchResultPage() {
                     return [...prevGames, ...newGames];
                 });
                 setHasNextGamePage(data.nextPage !== null);
-
-
             } catch (err: any) {
                 console.error("Failed to load more games:", err);
                 setHasNextGamePage(false);
@@ -196,17 +192,36 @@ export default function SearchResultPage() {
                 setIsFetchingMore(false);
             }
         };
-
         loadMoreGames();
     }, [gamePage, q, tab]);
 
 
+    useEffect(() => {
+        if (userPage === 1 || !q || tab !== 'users') return;
+
+        const loadMoreUsers = async () => {
+            setIsFetchingMore(true);
+            try {
+                const data = await searchUsers(q, userPage, 20);
+                setUsers(prevUsers => {
+                    const newUsers = data.users.filter(
+                        u => !(prevUsers.map(pu => pu.username).includes(u.username))
+                    );
+                    return [...prevUsers, ...newUsers];
+                });
+                setHasNextUserPage(data.current_page < data.total_pages);
+            } catch (err: any) {
+                console.error("Failed to load more users:", err);
+                setHasNextUserPage(false);
+            } finally {
+                setIsFetchingMore(false);
+            }
+        };
+
+        loadMoreUsers();
+    }, [userPage, q, tab]);
     const handleTabChange = (_event: React.SyntheticEvent, newTab: string) => {
         setSearchParams({ q: q || '', tab: newTab });
-    };
-
-    const handleUserPageChange = (_event: React.ChangeEvent<unknown>, newPage: number) => {
-        setSearchParams({ q: q || '', tab: tab, page: String(newPage) }); // Убрали 'ordering'
     };
 
 
@@ -228,7 +243,6 @@ export default function SearchResultPage() {
                     Search Results for: <strong>"{q}"</strong>
                 </Typography>
 
-                {/* Табы */}
                 <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
                     <Tabs value={tab} onChange={handleTabChange} aria-label="search tabs">
                         <Tab label="All" value="all" />
@@ -237,8 +251,8 @@ export default function SearchResultPage() {
                     </Tabs>
                 </Box>
 
-
                 <Grid container spacing={4}>
+
                     {tab === 'all' && (
                         <>
                             <Grid size={12}>
@@ -269,7 +283,6 @@ export default function SearchResultPage() {
                                     <CircularProgress />
                                 </Box>
                             )}
-                            {/* Конец списка */}
                             {!hasNextGamePage && !isFetchingMore && games.length > 0 && (
                                 <Typography variant="body1" align="center" sx={{ mt: 4, mb: 2, color: 'text.secondary' }}>
                                     You have viewed all games
@@ -278,20 +291,24 @@ export default function SearchResultPage() {
                         </Grid>
                     )}
 
-                    {/* --- Таб "Users" (Пагинация) --- */}
                     {tab === 'users' && (
                         <Grid size={12}>
-                            <UsersList users={users} />
-                            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
-                                {userPagination.total_pages > 1 && (
-                                    <Pagination
-                                        page={userPagination.current_page}
-                                        count={userPagination.total_pages}
-                                        onChange={handleUserPageChange}
-                                        color="primary"
-                                    />
-                                )}
-                            </Box>
+
+                            <UsersList users={users} lastUserElementRef={lastUserElementRef} />
+
+
+                            {isFetchingMore && (
+                                <Box display="flex" justifyContent="center" sx={{ mt: 4, mb: 2 }}>
+                                    <CircularProgress />
+                                </Box>
+                            )}
+
+                            {!hasNextUserPage && !isFetchingMore && users.length > 0 && (
+                                <Typography variant="body1" align="center" sx={{ mt: 4, mb: 2, color: 'text.secondary' }}>
+                                    You have viewed all users
+                                </Typography>
+                            )}
+
                         </Grid>
                     )}
                 </Grid>
